@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
@@ -18,10 +18,34 @@ const Scene3D = dynamic(() => import('./Scene3D'), { ssr: false })
 
 gsap.registerPlugin(ScrollTrigger)
 
+interface ClickState {
+  time: number
+  x: number
+  y: number
+}
+
 export default function ClientPage() {
   const mouseRef = useRef({ x: 0, y: 0 })
   const scrollProgress = useRef(0)
+  const clickRef = useRef<ClickState | null>(null)
   const [introDone, setIntroDone] = useState(false)
+
+  const handleClick = useCallback((e: MouseEvent) => {
+    clickRef.current = {
+      time: 1,
+      x: (e.clientX / window.innerWidth) * 2 - 1,
+      y: -(e.clientY / window.innerHeight) * 2 + 1,
+    }
+    const decay = () => {
+      if (clickRef.current && clickRef.current.time > 0.01) {
+        clickRef.current.time *= 0.92
+        requestAnimationFrame(decay)
+      } else if (clickRef.current) {
+        clickRef.current.time = 0
+      }
+    }
+    requestAnimationFrame(decay)
+  }, [])
 
   useEffect(() => {
     const lenis = new Lenis({
@@ -53,7 +77,6 @@ export default function ClientPage() {
       },
       pinType: document.body.style.transform ? 'transform' : 'fixed',
     })
-
     ScrollTrigger.refresh()
 
     const handleMouse = (e: MouseEvent) => {
@@ -63,33 +86,30 @@ export default function ClientPage() {
       }
     }
     window.addEventListener('mousemove', handleMouse, { passive: true })
+    window.addEventListener('click', handleClick)
 
     return () => {
       lenis.destroy()
       gsap.ticker.remove(tickerFn)
       window.removeEventListener('mousemove', handleMouse)
+      window.removeEventListener('click', handleClick)
       ScrollTrigger.getAll().forEach((t) => t.kill())
     }
-  }, [])
+  }, [handleClick])
 
   return (
     <>
       {!introDone && <IntroLoader onComplete={() => setIntroDone(true)} />}
-
       <CursorGlow mouseRef={mouseRef} />
-      <Scene3D mouseRef={mouseRef} scrollProgress={scrollProgress} />
+      <Scene3D mouseRef={mouseRef} clickRef={clickRef} scrollProgress={scrollProgress} />
       <Navigation />
-
       <div className="vignette" />
       <div className="grain" />
-      <div className="scanline" />
-
       <main className="relative z-10">
         <Hero />
         <About />
         <Projects />
         <Contact />
-
         <footer className="relative py-16 px-6">
           <div className="content-max-w mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
             <span className="text-xs tracking-[0.3em] text-white/20 uppercase font-body font-light">
@@ -97,13 +117,7 @@ export default function ClientPage() {
             </span>
             <div className="flex items-center gap-8">
               {['Twitter', 'GitHub', 'Dribbble'].map((link) => (
-                <a
-                  key={link}
-                  href="#"
-                  className="text-xs tracking-[0.2em] text-white/20 hover:text-white/60 transition-colors duration-300 uppercase font-body font-light"
-                >
-                  {link}
-                </a>
+                <a key={link} href="#" className="text-xs tracking-[0.2em] text-white/20 hover:text-white/60 transition-colors duration-300 uppercase font-body font-light">{link}</a>
               ))}
             </div>
           </div>
